@@ -1,0 +1,321 @@
+---
+title: "Predictive Analytics for Employee Retention"
+author: "Jennifer Amador-Gonzalez"
+date: "2025-01-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+#Loading libraries
+library(tidyverse)
+library(caret)
+library(ggplot2)
+
+#Loading the dataset
+file_path <- "/Users/jenniferamador/Downloads/WA_Fn-UseC_-HR-Employee-Attrition.csv"
+employee_data <-  read_csv(file_path)
+
+#View the structure and first few rows of the data
+str(employee_data)
+head(employee_data)
+
+#Check for missing values
+colSums(is.na(employee_data))
+
+```
+
+# Data Cleaning
+
+```{r}
+#Droping irrelevant columns
+employee_data <- employee_data %>%
+  select(-c(EmployeeNumber, StandardHours, Over18))
+
+#Convert categorical variables to factors
+employee_data <- employee_data %>%
+  mutate(across(c(Gender, MaritalStatus, JobRole, OverTime, Attrition), as.factor))
+
+#Check imbalances for the target variable
+table(employee_data$Attrition) / nrow(employee_data)
+```
+
+The table shows the proportion of employees who stayed (No) versus those who left (Yes) the organization.
+
+Attrition rate:
+
+83.88% of employees have not left the company (No).
+16.12% of employees have left the company (Yes).
+
+The 16.12% attrition rate should be evaluated against industry benchmarks to understand if it's a concern for the organization. High attrition rates can lead to increased costs for recruitment and training, as well as disruptions in team dynamics or productivity.
+
+Imbalance observation:
+
+The dataset is imbalanced, with far fewer employees leaving compared to those staying.
+This imbalance is common in real-world attrition but should be considered when building predictive models. Algorithms may be biased toward the majority class, that can lead to reducing the accuracy in predicting attrition.
+
+Potential recommendation for the project:
+
+Address data imbalance: Should consider using techniques such as oversampling (SMOTE) or undersampling to balance the classes.
+
+
+# Exploratory Data Analysis (EDA)
+
+## Analyze target variable distribution
+
+```{r}
+ggplot(employee_data, aes(x = Attrition, fill = Attrition)) +
+  geom_bar() +
+  ggtitle("Attrition Distribution") +
+  theme_minimal()
+```
+
+This bar plot represents the distribution of employees who stayed (No) versus those who left (Yes) in the dataset.
+
+Observations:
+Majority Class (No):
+
+A significantly higher count of employees (~1200) have stayed with the company.
+This indicates that most employees in the dataset do not leave the organization.
+
+Minority Class (Yes):
+
+A smaller count of employees (~200) have left the organization.
+This emphasizes the imbalance in the dataset, which is usual in attrition datasets.
+
+The organization shows a low attrition rate, which aligns with the earlier calculation (~16% attrition).
+However, the minority class (employees who leave) is critical for analysis as it provides insights into retention strategies.
+
+# Analyze key redictors
+
+## Attrition by overtime
+
+```{r}
+ggplot(employee_data, aes(x = OverTime, fill = Attrition)) +
+  geom_bar(position = "fill") +
+  ggtitle("Attrition by OverTime") +
+  ylab("Proportion") +
+  theme_minimal()
+```
+
+This proportional bar plot illustrates the relationship between overtime work (OverTime) and employee attrition (Attrition).
+
+Observations:
+
+Employees Without Overtime (No):
+
+The majority of employees who do not work overtime have stayed with the company (No).
+A small proportion of employees without overtime have left the company (Yes).
+
+Employees With Overtime (Yes):
+
+A larger proportion of employees who work overtime have left the company compared to those without overtime.
+This suggests that overtime work could be a contributing factor to higher attrition rates.
+
+Interpretation:
+Employees required to work overtime appear more likely to leave the company, indicating that overtime could be associated with dissatisfaction or burnout.
+
+
+Company recommendations:
+
+-Evaluate overtime policies to ensure employees are not burnedout.
+-Implement measures to alleviate the negative impact of overtime, such as flexible scheduling or compensatory time off.
+-Assess employee satisfaction levels for those working overtime.
+-Conduct surveys or feedback sessions to understand the reasons behind dissatisfaction linked to overtime.
+
+## Boxplot of MonthlyIncome by Attrition
+
+```{r}
+ggplot(employee_data, aes(x = Attrition, y = MonthlyIncome, fill = Attrition)) +
+  geom_boxplot() +
+  ggtitle("Monthly Income Distribution by Attrition") +
+  theme_minimal()
+```
+
+This box plot displays the distribution of monthly income (MonthlyIncome) for employees who stayed (No) versus those who left (Yes).
+
+Observations:
+
+Employees Who Stayed (No):
+
+The median monthly income of employees who stayed is significantly higher compared to employees who left.
+The distribution shows a wider range of incomes, with many employees earning more than $10,000 per month (including outliers).
+
+Employees Who Left (Yes):
+
+Their median monthly income is lower compared to employees who stayed.
+There are fewer high-income employees among those who left, and the overall distribution is at lower income levels.
+
+Interpretation:
+
+Lower Income as a Factor for Attrition:
+Employees with lower monthly incomes are more likely to leave, suggesting that income levels may influence attrition rates. This could indicate dissatisfaction with pay among lower-earning employees or limited growth opportunities.
+
+Company recommendations:
+
+-Consider reviewing salary structures, particularly for lower-income roles, to ensure market competitiveness and fairness.
+-Provide transparent communication about salary growth opportunities like performance-based incentives.
+-For employees in lower-income brackets, offer non-monetary benefits such as career development programs, skill-building workshops, or mentorship opportunities.
+-Collect feedback from employees in lower-income roles to understand their concerns and reasons for dissatisfaction.
+
+## Correlation Heatmap
+
+```{r}
+library(corrplot)
+
+numeric_cols <- employee_data %>%
+  select_if(is.numeric)
+
+cor_matrix <- cor(numeric_cols, use = "complete.obs")
+corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
+```
+The correlation heatmap provides insights into how numerical features in the dataset relate to each other and to the target variable (Attrition).
+
+Observations:
+
+YearsWithCurrManager: Negatively correlated with Attrition. Employees who have worked longer with their current manager are less likely to leave.
+YearsInCurrentRole: Also negatively correlated, indicating that employees in stable roles are less likely to churn.
+TotalWorkingYears: Strong negative correlation with Attrition, suggesting that more experienced employees are less likely to leave.
+MonthlyIncome: Negatively correlated, confirming earlier findings that higher-income employees are less likely to churn.
+MonthlyIncome and JobLevel: Strong positive correlation, indicating that higher job levels result in higher income.
+YearsAtCompany and TotalWorkingYears: Strong positive correlation, suggesting employees with longer total working years tend to stay longer at the company.
+
+*Features like HourlyRate, DailyRate, and PerformanceRating show weak or no correlation with Attrition, indicating they may not be significant predictors.
+
+Recommendations:
+-Improve job satisfaction and growth opportunities for lower-income employees.
+-Encourage consistent managerial assignments to build trust and stability among employees.
+-Incorporate strongly correlated features like YearsWithCurrManager, YearsInCurrentRole, and MonthlyIncome as predictors in the attrition model.
+
+
+# Feature Engineering
+
+## Creating derived features
+
+```{r}
+employee_data <- employee_data %>%
+  mutate(TenurePerRole = YearsInCurrentRole / YearsAtCompany)
+```
+
+## Normalizing numeric features
+
+```{r}
+preproc <- preProcess(employee_data %>% select_if(is.numeric), method = c("center", "scale"))
+employee_data_scaled <- predict(preproc, employee_data %>% select_if(is.numeric))
+```
+
+# Building Predictive Model
+
+## Splitting aata into train and test sets
+
+```{r}
+set.seed(123)
+train_index <- createDataPartition(employee_data$Attrition, p = 0.7, list = FALSE)
+train <- employee_data[train_index, ]
+test <- employee_data[-train_index, ]
+```
+
+
+## Logistic regression model
+
+```{r}
+log_model <- glm(Attrition ~ OverTime + MonthlyIncome + JobSatisfaction + Age + TotalWorkingYears,data = train, family = "binomial")
+
+summary(log_model)
+```
+
+The logistic regression model provides insights into which features significantly influence employee attrition.
+
+Significant predictors:
+
+OverTimeYes: Employees who work overtime are significantly more likely to leave. The coefficient is 1.374, indicating a strong positive relationship with attrition. This is also reflected by the small p-value (< 0.001).
+JobSatisfaction: Employees with lower job satisfaction are more likely to leave. The coefficient is negative (-0.285), suggesting that as job satisfaction increases, the likelihood of attrition decreases. This is statistically significant (p < 0.001).
+TotalWorkingYears: Employees with more years of total working experience are less likely to leave, as indicated by the negative coefficient (-0.057) and a p-value of 0.02.
+
+Non-Significant predictors:
+
+MonthlyIncome: The coefficient is very small (-0.000047) and not statistically significant (p = 0.21), suggesting no strong relationship between income and attrition after controlling for other variables.
+Age: Similarly, age does not appear to be a significant predictor of attrition (p = 0.22).
+
+Model Metrics:
+
+Null Deviance: 909.69, representing the model with no predictors.
+Residual Deviance: 799.96, indicating the model with predictors. The reduction shows that the model explains some variation in attrition.
+AIC (Akaike Information Criterion): 811.96, can be used for comparing models—lower values to indicate a better fit.
+
+Interpretations:
+-OverTime: A strong driver of attrition. Employees working overtime are significantly more likely to leave, highlighting potential burnout or dissatisfaction.
+-Job Satisfaction: Employees who are less satisfied with their jobs are more prone to attrition. This emphasizes the importance of improving job satisfaction to retain employees.
+-Total Working Years: Employees with longer experience are less likely to leave, indicating that more experienced employees are likely more stable.
+
+Recommendations:
+-Address workload distribution to minimize the need for overtime.
+-Provide compensatory benefits or flexible schedules for employees required to work overtime.
+-Conduct a regular employee satisfaction surveys and act on the feedback.
+-Offer professional development opportunities and recognition programs.
+-Since experienced employees are less likely to leave, prioritize retention strategies for those with fewer total working years.
+
+## Making predictions and evaluating
+
+```{r}
+# Predict on test data
+test$pred <- predict(log_model, newdata = test, type = "response")
+
+# Convert predictions to binary
+test$pred_class <- ifelse(test$pred > 0.5, "Yes", "No")
+
+# Confusion Matrix
+confusionMatrix(as.factor(test$pred_class), test$Attrition)
+```
+
+The confusion matrix and associated metrics evaluate the performance of the logistic regression model in predicting employee attrition.
+
+Confusion Matrix:
+True Negatives (TN): 366 (Correctly predicted "No" for employees who did not leave)
+False Positives (FP): 66 (Predicted "Yes" for employees who did not leave)
+False Negatives (FN): 3 (Predicted "No" for employees who left)
+True Positives (TP): 5 (Correctly predicted "Yes" for employees who left)
+
+Performance metrics:
+
+Accuracy: 84.32%
+
+The model correctly classified 84.32% of the instances. However, given the class imbalance, accuracy might not be the best metric to rely on.
+
+
+-The model correctly identified 99.18% of employees who did not leave (class "No").
+-High sensitivity reflects the model's ability to detect the dominant class ("No").
+
+-The model identified only 7.04% of employees who actually left (class "Yes").
+-This indicates poor performance in detecting the minority class.
+
+-When the model predicted "No", it was correct 84.72% of the time.
+-When the model predicted "Yes", it was correct only 62.50% of the time.
+
+Kappa: 0.0971
+This low value indicates poor agreement between the predictions and actual results beyond chance, emphasizing the challenges posed by class imbalance.
+
+Balanced accuracy: 53.11%
+This metric averages sensitivity and specificity, reflecting the model's balanced performance. The value is just slightly better than random guessing (50%).
+
+McNemar's test p-value: <0.001
+The test shows significant differences in the error rates for predicting "Yes" and "No", likely due to the class imbalance.
+
+Observations:
+-The model performs well in identifying employees who do not leave (class "No").
+-The performance for the minority class ("Yes") is poor, as shown by low specificity and precision for predicting "Yes".
+-This imbalance is a significant issue, as the focus of the analysis is on understanding and predicting attrition (class "Yes").
+
+Recommendations:
+-Using techniques such as SMOTE (Synthetic Minority Oversampling Technique) or down-sampling the majority class to balance the dataset.
+-Re-train the model on the balanced dataset to improve performance for the minority class.
+-Explore other machine learning models like Random Forest or Gradient Boosting, which handle class imbalance better
+-Focus on metrics such as ROC-AUC, F1 Score, and Precision-Recall curves, which are more informative for imbalanced datasets.
+
+Conclusion:
+While this model helps us identifying employees who do not leave highly accuretly, it significantly lacks identifying those who actually left. This concern arised due to the significant imbalanced mentioned since the early analysis of the data. Future research and modifications should be performed with the noted recommendations in order to be able to receive much accurate model results.
